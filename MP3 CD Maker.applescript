@@ -1,14 +1,19 @@
 (*
 	MP3 CD Maker
 	
-	So iTunes already does this.
+	This script was originally written by Ben Samuel on Mar 27, 2011.
+	The contents of this repository, MP3-CD-Maker-for-iTunes, are released to the public domain.
+	The terms iTunes, Genius, MP3, CD, AppleScript and others may be trademarks of their respective holders.
+
+	So iTunes already has a function to create an MP3 CD.
 	But, as you probably noticed, you have to convert all your songs to MP3.
-	Okay, that gets tedious, especially since a CD will hold 100 MP3s... 
-	And after burning, I've got MP3 versions of my songs floating around my library.
-	
-	Solution 1: ditch iTunes for a good music library.
+	And you can't do it in place, you have to manually recreate the entire playlist.
+	Okay, that gets tedious, especially since a CD will hold around 100 MP3s. 
+	And now, after burning, I've got MP3 versions of my songs floating around my library.
+
+	Solution 1: ditch iTunes for a good music library app.
 	Solution 2: this script.
-	
+
 	This script will:
 	1. Step through any playlist, to include a Genius mix, or DJ shuffle.
 	2. Skip over songs that are already MP3s.
@@ -18,7 +23,7 @@
 	6. Do a Pretty Good Job of figuring out what will fit on a CD.
 		(Sorry, it doesn't attempt to calculate file system overhead.)
 	7. Number as it goes.
-	
+
 	You need to:
 	1. Set up a playlist.
 	2. Start iTunes playing as though you were listening to the playlist.
