@@ -1,0 +1,30 @@
+(*
+	MP3 CD Maker
+
+	So iTunes already does this.
+	But, as you probably noticed, you have to convert all your songs to MP3.
+	Okay, that gets tedious, especially since a CD will hold 100 MP3s... 
+	And after burning, I've got MP3 versions of my songs floating around my library.
+
+	Solution 1: ditch iTunes for a good music library.
+	Solution 2: this script.
+
+	This script will:
+	1. Step through any playlist, to include a Genius mix, or DJ shuffle.
+	2. Skip over songs that are already MP3s.
+	3. Clean up after itself as it goes.
+	4. Automatically bail if there are 10 failures in a row. 
+	5. Write a log to the desktop.
+	6. Do a Pretty Good Job of figuring out what will fit on a CD.
+		(Sorry, it doesn't attempt to calculate file system overhead.)
+	7. Number as it goes.
+
+	You need to:
+	1. Set up a playlist.
+	2. Start iTunes playing as though you were listening to the playlist.
+	3. Hit pause.
+	4. Run the script.
+	5. It will prompt for a folder. Select an existing folder, or create a new one.
+	6. Get a blank CD, and burn the contents of the folder.
+	7. You're done!
+*)
