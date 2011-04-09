@@ -56,6 +56,12 @@ property tgt_capacity : 360000 -- a 700 MB CD
 --property tgt_capacity: 4171712 -- a DVD-R double layer
 --property tgt_capacity: 4173824 -- a DVD+R double layer
 
+-- Directory we're storing tracks in
+property my_dir : null
+
+-- Should we remove artwork to save space?
+property remove_artwork : true
+
 -- Not commenting as much since the logging does that for us.
 on run
 	-- Set up logging
@@ -87,40 +93,19 @@ on run
 			try
 				set my_track to the current track
 				my log_mesg(log_fh, "Working on track " & location of my_track)
-				if kind of my_track is "MPEG audio file" then
-					-- all we need to do is copy
-					my log_mesg(log_fh, "Track is already MP3.")
-					set track_file to location of my_track
-					my log_mesg(log_fh, "Copying to target dir.")
-					tell application "Finder" to set after_op to ((duplicate track_file to my_dir) as alias)
-				else
-					my log_mesg(log_fh, "Attempting to convert " & kind of my_track & " to MP3.")
-					set converted_tracks to (convert my_track)
-					if (count converted_tracks) is not 1 then
-						error "Conversion returned no files. Is track protected?"
-					end if
-					set converted_track to first item of converted_tracks
-					set conv_file to location of converted_track
-					my log_mesg(log_fh, "Converted to: " & (conv_file as string))
-					tell application "Finder" to set after_op to ((move conv_file to my_dir) as alias)
-					my log_mesg(log_fh, "Moved to: " & (after_op as string))
-					my log_mesg(log_fh, "Deleting iTunes entry.")
-					-- Notably, this only deletes the entry.
-					-- It will fail if the file is still present, but succeed even if the file was merely moved out of the iTunes folder.
-					delete converted_track
-				end if
+				set converted_file to my convert_track(log_fh, my_track)
 				
 				-- Work out how much space this is using
-				set file_sectors to (my calc_sectors_used_file(after_op))
+				set file_sectors to my calc_sectors_used_file(converted_file)
 				my log_mesg(log_fh, "File is " & (file_sectors as string) & " sectors.")
 				set sectors_remaining to sectors_remaining - file_sectors
 				
 				-- Rename the track nicely
-				set new_name to (my format_track_name(track_counter, my_track))
+				set new_name to my format_track_name(track_counter, my_track)
 				my log_mesg(log_fh, "Renaming track to '" & new_name & "'.")
 				tell application "Finder"
-					set file_ext to name extension of after_op
-					set name of after_op to new_name & "." & file_ext
+					set file_ext to name extension of converted_file
+					set name of converted_file to new_name & "." & file_ext
 				end tell
 				set track_counter to track_counter + 1
 				
@@ -133,7 +118,15 @@ on run
 			end try
 			try
 				my log_mesg(log_fh, "Attempting to move to next track")
+				set last_track to current track
 				next track
+				-- This seems to work because tracks aren't equal if they're
+				-- a different index within the playlist.
+				-- To check if they are the same file, you can check the database ID property.
+				if last_track is current track then
+					my log_mesg(log_fh, "Detected last track.")
+					exit repeat
+				end if
 			on error e
 				my log_mesg(log_fh, "Error: " & (e as string))
 				display alert "Could not get next track, probably at end of playlist, bailing."
@@ -255,7 +248,7 @@ on choose_playlist(log_fh)
 			with title "Choose Playlist" with prompt blurb Â
 			OK button name "Convert" default items ((first item of choice_names) as list) Â
 			without multiple selections allowed and empty selection allowed)
-		if (count choices) is 0 then
+		if choices is false then
 			error "User cancelled operation."
 		end if
 		set choice to first item of choices
@@ -271,6 +264,56 @@ on choose_playlist(log_fh)
 	end tell
 end choose_playlist
 
+-- This is the guts of the script that converts an actual file.
+on convert_track(log_fh, the_track)
+	tell application "iTunes"
+		if kind of the_track is "Protected AAC audio file" then
+			error "Can't convert protected file"
+		else if kind of the_track is "MPEG audio file" then
+			my log_mesg(log_fh, "Track is already MP3.")
+			-- all we need to do is copy
+			set track_file to location of the_track
+			my log_mesg(log_fh, "Copying to target dir.")
+			tell application "Finder" to set converted_file to ((duplicate track_file to my_dir) as alias)
+			-- It's surprisingly annoying to get iTunes to duplicate a track
+			-- Even duplicating the file in the Finder and adding it back to the library doesn't work.
+			-- So we don't try to remove artwork for a copy.
+		else
+			my log_mesg(log_fh, "Attempting to convert " & kind of the_track & " to MP3.")
+			set converted_tracks to (convert the_track)
+			if (count converted_tracks) is not 1 then
+				error "Conversion returned no files. Is track protected?"
+			end if
+			set converted_track to first item of converted_tracks
+			set the_error to null
+			try
+				if my remove_artwork then
+					repeat with the_artwork in every artwork of converted_track
+						try
+							delete the_artwork
+						end try
+					end repeat
+				end if
+				set conv_file to location of converted_track
+				my log_mesg(log_fh, "Converted to: " & (conv_file as string))
+				tell application "Finder" to set converted_file to ((move conv_file to my_dir) as alias)
+				my log_mesg(log_fh, "Moved to: " & (converted_file as string))
+			on error e -- Fake a 'finally' clause
+				set the_error to e
+			end try
+			-- Notably, this only deletes the entry.  It will fail if the file is still present, 
+			-- but succeed even if the file was merely moved out of the iTunes folder.
+			my log_mesg(log_fh, "Deleting iTunes entry.")
+			delete converted_track
+			-- Now bubble any error up to the caller.
+			if the_error is not null then
+				error the_error
+			end if
+		end if
+	end tell
+	return converted_file
+end convert_track
+
 -- Simple logging facility
 on log_mesg(fh, the_mesg)
 	-- Call the date function to format its output
@@ -282,10 +325,12 @@ end log_mesg
 -- So, I figured that if I'm calling a subshell to figure out the date
 -- why bother opening a file for access at all?
 on log_start(the_log_file)
+	set fh to POSIX path of the_log_file
+	log_mesg(fh, "Log begins")
 	tell application "Finder"
-		open the_log_file using (path to application "Console")
+		open (file the_log_file) using (path to application "Console")
 	end tell
-	return POSIX path of the_log_file
+	return fh
 end log_start
 
 -- Just note the fact that the log closed properly in case I decide to
